@@ -1,123 +1,64 @@
+#!groovy
+
 pipeline {
+    agent none
 
-    agent none
+    environment {
+        IMAGE_NAME_API = "olx-asp-api"
+        IMAGE_NAME_FRONT = "olx-client"
+        CONTAINER_NAME_FRONT = "olx_client_container"
+        CONTAINER_NAME_BACK = "olx_container"
+    }
 
- 
+    stages {
 
-    environment {
+        stage("Build Back") {
+            agent { label 'gosell' }
+            steps {
+                echo 'Building back image ...'
+                sh """
+                    cd OLX.API
+                    docker build --no-cache \
+                        -t ${IMAGE_NAME_API}:${env.BUILD_NUMBER} \
+                        -t ${IMAGE_NAME_API}:latest \
+                        .
+                    cd ..    
+                """
+            }
+        }
 
-        IMAGE_NAME_API = "olx-asp-api"
+        stage("Build Front") {
+            agent { label 'gosell' }
+            steps {
+                echo 'Building front image ...'
+                sh """
+                    cd OLX.Frontend
+                    docker build --no-cache \
+                        -t ${IMAGE_NAME_FRONT}:${env.BUILD_NUMBER} \
+                        -t ${IMAGE_NAME_FRONT}:latest \
+                        .
+                    cd ..    
+                """
+            }
+        }
 
-        IMAGE_NAME_FRONT = "olx-client"
+        stage("Deploy GoSell on remote server") {
+            agent { label 'gosell' }
+            steps {
+                echo "Deploying GoSell on remote server ..."  
+                sh """
 
-        CONTAINER_NAME_FRONT = "olx_client_container"
+                        echo "Cleaning up old containers and images..."
+                        docker stop ${CONTAINER_NAME_FRONT} ${CONTAINER_NAME_BACK} || true
+                        docker rm ${CONTAINER_NAME_FRONT} ${CONTAINER_NAME_BACK} || true
+                        docker rmi -f ${IMAGE_NAME_API} ${IMAGE_NAME_FRONT} || true
+                        docker compose down --remove-orphans || true
 
-        CONTAINER_NAME_BACK = "olx_container"
+                        IMAGE_TAG=${env.BUILD_NUMBER} docker compose up -d
+                        docker image prune -f
+                """
+            }
+        }
 
-    }
-
- 
-
-    stages {
-
- 
-
-        stage("Build Back") {
-
-            agent { label 'gosell' }
-
-            steps {
-
-                echo 'Building back image ...'
-
-                sh """
-
-                    cd OLX.API
-
-                    docker build --no-cache \
-
-                        -t ${IMAGE_NAME_API}:${env.BUILD_NUMBER} \
-
-                        -t ${IMAGE_NAME_API}:latest \
-
-                        .
-
-                    cd ..    
-
-                """
-
-            }
-
-        }
-
- 
-
-        stage("Build Front") {
-
-            agent { label 'gosell' }
-
-            steps {
-
-                echo 'Building front image ...'
-
-                sh """
-
-                    cd OLX.Frontend
-
-                    docker build --no-cache \
-
-                        -t ${IMAGE_NAME_FRONT}:${env.BUILD_NUMBER} \
-
-                        -t ${IMAGE_NAME_FRONT}:latest \
-
-                        .
-
-                    cd ..    
-
-                """
-
-            }
-
-        }
-
- 
-
-        stage("Deploy GoSell on remote server") {
-
-            agent { label 'gosell' }
-
-            steps {
-
-                echo "Deploying GoSell on remote server ..."  
-
-                sh """
-
- 
-
-                        echo "🧹 Cleaning up old Nagios container and image..."
-
-                        docker stop ${CONTAINER_NAME_FRONT} ${CONTAINER_NAME_BACK} || true
-
-                        docker rm ${CONTAINER_NAME_FRONT} ${CONTAINER_NAME_BACK} || true
-
-                        docker rmi -f ${IMAGE_NAME_API} ${IMAGE_NAME_FRONT} || true
-
-                        docker compose down --remove-orphans || true
-
- 
-
-                        IMAGE_TAG=${env.BUILD_NUMBER} docker compose up -d
-
-                        docker image prune -f
-
-                """
-
-            }
-
-        }
-
- 
-
-    }
-
+    }
 }
